@@ -156,6 +156,10 @@ function load() {
 export function useStore() {
   const [store, setStore] = useState(load);
 
+  // Keep a live snapshot so stable callbacks can read the latest store.
+  const storeRef = useRef(store);
+  storeRef.current = store;
+
   // Persist during idle time so large conversations don't block rendering while
   // the agent is streaming tool/message updates.
   const timer = useRef(null);
@@ -209,17 +213,22 @@ export function useStore() {
   // Create a chat from an explicit seed (the New-chat panel). Any setting the
   // seed omits is inherited from the current chat / defaults.
   const createChat = useCallback((seed = {}) => {
-    setStore((s) => {
-      const base = s.chats.find((c) => c.id === s.activeChatId) || s.defaults;
-      const merged = {
-        ...Object.fromEntries(SETTING_KEYS.map((k) => [k, base[k]])),
-        ...Object.fromEntries(SETTING_KEYS.filter((k) => k in seed).map((k) => [k, seed[k]])),
-      };
-      if (seed.apiIdentity) merged.apiIdentity = seed.apiIdentity;
-      if (!merged.keyId) merged.keyId = s.apiKeys[0]?.id || null;
-      const chat = makeChat(merged);
-      return { ...s, chats: [chat, ...s.chats], activeChatId: chat.id };
-    });
+    const s = storeRef.current;
+    const base = s.chats.find((c) => c.id === s.activeChatId) || s.defaults;
+    const merged = {
+      ...Object.fromEntries(SETTING_KEYS.map((k) => [k, base[k]])),
+      ...Object.fromEntries(SETTING_KEYS.filter((k) => k in seed).map((k) => [k, seed[k]])),
+    };
+    if (seed.apiIdentity) merged.apiIdentity = seed.apiIdentity;
+    if (!merged.keyId) merged.keyId = s.apiKeys[0]?.id || null;
+    const chat = makeChat(merged);
+    // Non-setting fields (used when branching an existing conversation).
+    if (typeof seed.title === "string" && seed.title.trim()) chat.title = seed.title;
+    if (Array.isArray(seed.messages)) chat.messages = seed.messages;
+    if (Array.isArray(seed.turns)) chat.turns = seed.turns;
+    if ("previousResponseId" in seed) chat.previousResponseId = seed.previousResponseId ?? null;
+    setStore((prev) => ({ ...prev, chats: [chat, ...prev.chats], activeChatId: chat.id }));
+    return chat;
   }, []);
 
   const switchChat = useCallback((id) => {

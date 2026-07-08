@@ -322,7 +322,6 @@ export default function App() {
   const [input, setInput] = useState("");
   const [requestState, setRequestState] = useState({});
   const [failedMessage, setFailedMessage] = useState(null);
-  const [recoveryMode, setRecoveryMode] = useState(null);
   const [deleteChatId, setDeleteChatId] = useState(null);
   const [clearWorkspaceOnDelete, setClearWorkspaceOnDelete] = useState(false);
   const [deleteInProgress, setDeleteInProgress] = useState(false);
@@ -389,7 +388,6 @@ export default function App() {
     setAttachments([]);
     setVisibleMessageCount(INITIAL_VISIBLE_MESSAGES);
     setFailedMessage(null);
-    setRecoveryMode(null);
   }, [activeChatId]);
 
   // Pre-fill the workspace folder from the server default for the first chat.
@@ -491,10 +489,13 @@ export default function App() {
     return apiIdentity;
   };
 
-  const send = async () => {
-    const text = input.trim();
+  // `overrides` lets recovery flows (Retry) resend a message directly without
+  // relying on composer state, which would be stale inside the same render.
+  const send = async (overrides = null) => {
+    const text = (overrides?.text ?? input).trim();
+    const sentAttachments = overrides?.attachments ?? attachments;
     const chatId = activeChatId;
-    if ((!text && attachments.length === 0) || Boolean(requestState[chatId]?.busy)) return;
+    if ((!text && sentAttachments.length === 0) || Boolean(requestState[chatId]?.busy)) return;
     if (!chat) {
       updateRequestState(chatId, { error: "Create a chat before sending a prompt." });
       return;
@@ -518,7 +519,6 @@ export default function App() {
       return;
     }
 
-    const sentAttachments = attachments;
     const safetyId = chat.safetyIdentifierEnabled ? chat.safetyIdentifier || null : null;
     const turnId = nextId("turn");
     const userMessageId = nextId("msg");
@@ -790,20 +790,16 @@ export default function App() {
   // Recovery option A: Retry the failed message as-is
   const handleRetry = useCallback(() => {
     if (!failedMessage) return;
-    setRecoveryMode("retry");
-    setAttachments(failedMessage.attachments);
-    // Re-send using the stored message and context
-    // Remove the failed turn and messages from this attempt, then resend
+    // Remove the failed turn and messages from this attempt, then resend the
+    // stored message directly — composer state would be stale this render.
     updateChat(activeChatId, (c) => ({
       messages: c.messages.filter((m) => m.id !== failedMessage.userMessageId),
       turns: c.turns.filter((t) => t.id !== failedMessage.turnId),
     }));
     setFailedMessage(null);
-    setRecoveryMode(null);
-    setInput(failedMessage.text);
-    // Trigger send on next tick so input is updated
-    setTimeout(() => send(), 0);
-  }, [failedMessage, activeChatId, updateChat, send]);
+    updateRequestState(activeChatId, { error: null });
+    send({ text: failedMessage.text, attachments: failedMessage.attachments });
+  }, [failedMessage, activeChatId, updateChat, updateRequestState, send]);
 
   // Recovery option B: Edit and retry
   const handleEditAndRetry = useCallback(() => {
@@ -823,11 +819,14 @@ export default function App() {
   // Recovery option C: Branch to new chat from current point
   const handleBranch = useCallback(() => {
     if (!failedMessage) return;
+    // Cut history at the failed user message (tool/notice rows may follow it).
+    const failedIndex = chat.messages.findIndex((m) => m.id === failedMessage.userMessageId);
+    const messages = failedIndex === -1 ? chat.messages : chat.messages.slice(0, failedIndex);
     // Create new chat with same settings as current
     const newChat = createChat({
       title: `${chat.title} (branch)`,
-      messages: chat.messages.slice(0, -1), // Exclude the failed user message
-      turns: chat.turns.slice(0, -1), // Exclude the failed turn
+      messages,
+      turns: chat.turns.filter((t) => t.id !== failedMessage.turnId),
       previousResponseId: failedMessage.previousResponseId, // Use last known-good context
       keyId: chat.keyId,
       model: chat.model,

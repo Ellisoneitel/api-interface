@@ -293,7 +293,13 @@ function clampNumber(value, fallback, min, max) {
 async function walkTree(root, dir, lines, limit) {
   if (lines.length >= limit) return;
 
-  const entries = await fs.readdir(dir, { withFileTypes: true });
+  let entries;
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch (e) {
+    lines.push(`[skip] ${toWorkspaceRelative(root, dir)} (${e.code || "unreadable"})`);
+    return;
+  }
   entries.sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name));
 
   for (const entry of entries) {
@@ -587,7 +593,8 @@ export async function executeTool(name, args, workspaceRoot, allowOutside = fals
           text = text.split(oldText).join(newText);
           counts.push(count);
         } else {
-          text = text.replace(oldText, newText);
+          // Use a function replacement so "$&", "$1" etc. in newText are literal.
+          text = text.replace(oldText, () => newText);
           counts.push(1);
         }
       }

@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import os from "os";
 import path from "path";
 import fs from "fs/promises";
 import { exec } from "child_process";
@@ -108,6 +109,19 @@ app.post("/api/clear-workspace", async (req, res) => {
   }
   try {
     const root = path.resolve(workspaceRoot);
+    // Refuse to clear obviously dangerous roots: a drive/filesystem root, the
+    // home directory, or any ancestor of the home directory (e.g. C:\Users).
+    const home = path.resolve(os.homedir());
+    const fold = (p) => (process.platform === "win32" ? p.toLowerCase() : p);
+    const isDriveRoot = fold(root) === fold(path.parse(root).root);
+    const isHomeOrAncestor =
+      fold(home) === fold(root) || fold(home).startsWith(fold(root) + path.sep);
+    if (isDriveRoot || isHomeOrAncestor) {
+      return res.status(400).json({
+        ok: false,
+        error: `Refusing to clear "${root}" — it is a drive root, your home directory, or a parent of it.`,
+      });
+    }
     const stat = await fs.stat(root);
     if (!stat.isDirectory()) {
       return res.status(400).json({ ok: false, error: "Workspace root is not a directory." });

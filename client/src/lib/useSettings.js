@@ -6,14 +6,14 @@ import { useEffect, useState, useCallback, useRef } from "react";
 const KEY = "codex-local-assistant.store.v2";
 const OLD_KEY = "codex-local-assistant.settings.v1";
 
-// Per-conversation settings (everything that used to be global). A safety
-// identifier is always generated and sent for every conversation.
+// Per-conversation settings (everything that used to be global). The safety
+// identifier is optional per conversation and is sent only when enabled.
 const SETTING_DEFAULTS = {
   keyId: null, // which pooled API key this chat uses
   model: "gpt-5.5",
   approvalMode: "smart", // "smart" | "manual" | "auto"
   allowOutsideWorkspace: false,
-  safetyIdentifierEnabled: true,
+  safetyIdentifierEnabled: false,
   safetyIdentifier: "",
   workspaceRoot: "",
   workspaceValidated: false,
@@ -117,7 +117,6 @@ function migrateV1(old) {
 function normalize(store) {
   if (!Array.isArray(store.apiKeys)) store.apiKeys = [];
   store.defaults = { ...SETTING_DEFAULTS, ...(store.defaults || {}) };
-  store.defaults.safetyIdentifierEnabled = true; // always on, even for old stores
   if (!Array.isArray(store.chats)) store.chats = [];
   if (!store.chats.find((c) => c.id === store.activeChatId)) {
     store.activeChatId = store.chats[0]?.id || null;
@@ -126,9 +125,10 @@ function normalize(store) {
     if (!["smart", "manual", "auto"].includes(c.approvalMode)) {
       c.approvalMode = SETTING_DEFAULTS.approvalMode;
     }
-    // Safety identifiers are always on; migrate older chats that lacked one.
-    c.safetyIdentifierEnabled = true;
-    if (!c.safetyIdentifier) c.safetyIdentifier = randomHex();
+    if (typeof c.safetyIdentifierEnabled !== "boolean") {
+      c.safetyIdentifierEnabled = Boolean(c.safetyIdentifier);
+    }
+    if (c.safetyIdentifierEnabled && !c.safetyIdentifier) c.safetyIdentifier = randomHex();
     c.apiIdentity = c.apiIdentity || null;
     c.messages = ensureUniqueIds(c.messages, "msg");
     c.turns = dedupeTurnCalls(ensureUniqueIds(c.turns, "turn"));

@@ -519,7 +519,7 @@ export default function App() {
       return;
     }
 
-    const safetyId = chat.safetyIdentifier || null;
+    const safetyId = chat.safetyIdentifierEnabled ? chat.safetyIdentifier || null : null;
     const turnId = nextId("turn");
     const userMessageId = nextId("msg");
 
@@ -1190,6 +1190,7 @@ export default function App() {
         width={rightWidth}
         turns={turns}
         apiIdentity={chat?.apiIdentity}
+        safetyIdentifierEnabled={chat?.safetyIdentifierEnabled}
         safetyIdentifier={chat?.safetyIdentifier}
         onExport={exportTurnLog}
       />

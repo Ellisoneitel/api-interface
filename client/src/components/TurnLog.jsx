@@ -4,7 +4,6 @@ import {
   Copy,
   Check,
   ShieldCheck,
-  ShieldOff,
   Download,
   KeyRound,
   Building2,
@@ -70,41 +69,27 @@ function ApiIdentityCard({ identity }) {
   );
 }
 
-function SafetyIdentifierCard({ enabled, value }) {
+function SafetyIdentifierCard({ value }) {
   return (
-    <div
-      className={`rounded-xl border p-3 text-xs ${
-        enabled
-          ? "border-emerald-500/20 bg-emerald-500/[0.04]"
-          : "border-white/10 bg-white/[0.02]"
-      }`}
-    >
-      <div
-        className={`mb-2 flex items-center gap-1.5 font-semibold ${
-          enabled ? "text-emerald-300" : "text-zinc-400"
-        }`}
-      >
-        {enabled ? <ShieldCheck size={13} /> : <ShieldOff size={13} />} Safety Identifier
+    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-3 text-xs">
+      <div className="mb-2 flex items-center gap-1.5 font-semibold text-emerald-300">
+        <ShieldCheck size={13} /> Safety Identifier
       </div>
-      {enabled && value ? (
+      {value ? (
         <div className="flex items-center gap-1.5 rounded-lg bg-black/30 p-2">
           <code className="min-w-0 flex-1 truncate text-zinc-300">{value}</code>
           <CopyBtn value={value} />
         </div>
-      ) : enabled ? (
-        <div className="flex items-center gap-1.5 rounded-lg bg-black/30 p-2 text-zinc-500">
-          <ShieldOff size={12} /> Enabled, not set
-        </div>
       ) : (
         <div className="flex items-center gap-1.5 rounded-lg bg-black/30 p-2 text-zinc-500">
-          <ShieldOff size={12} /> Disabled for this chat
+          <ShieldCheck size={12} /> Generated when the chat is created
         </div>
       )}
     </div>
   );
 }
 
-export default function TurnLog({ width, turns, apiIdentity, safetyIdentifierEnabled, safetyIdentifier, onExport }) {
+export default function TurnLog({ width, turns, apiIdentity, safetyIdentifier, onExport }) {
   const [visibleTurnCount, setVisibleTurnCount] = useState(INITIAL_VISIBLE_TURNS);
   const visibleTurns = useMemo(
     () => turns.slice(Math.max(0, turns.length - visibleTurnCount)),
@@ -132,7 +117,7 @@ export default function TurnLog({ width, turns, apiIdentity, safetyIdentifierEna
 
       <div className="p-3 space-y-3">
         <ApiIdentityCard identity={apiIdentity} />
-        <SafetyIdentifierCard enabled={safetyIdentifierEnabled} value={safetyIdentifier} />
+        <SafetyIdentifierCard value={safetyIdentifier} />
 
         {turns.length === 0 && (
           <p className="px-1 text-xs text-zinc-500">
@@ -185,17 +170,14 @@ export default function TurnLog({ width, turns, apiIdentity, safetyIdentifierEna
                     <span className="truncate">{identity.organizationId}</span>
                   </span>
                 )}
-                <span
-                  className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] ${
-                    turn.safetyIdentifier
-                      ? "bg-emerald-500/15 text-emerald-300"
-                      : "bg-zinc-500/15 text-zinc-400"
-                  }`}
-                  title={turn.safetyIdentifier || "safety_identifier not sent"}
-                >
-                  {turn.safetyIdentifier ? <ShieldCheck size={11} /> : <ShieldOff size={11} />}
-                  {turn.safetyIdentifier ? "safety id" : "no safety id"}
-                </span>
+                {turn.safetyIdentifier && (
+                  <span
+                    className="flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300"
+                    title={turn.safetyIdentifier}
+                  >
+                    <ShieldCheck size={11} /> safety id
+                  </span>
+                )}
               </div>
 
               <div className="space-y-2">
